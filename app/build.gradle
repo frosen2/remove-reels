@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.removereels'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.removereels'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        // A fixed key checked into the repo so every build from CI can be
+        // installed over the previous one without uninstalling first.
+        shared {
+            storeFile file('signing.keystore')
+            storePassword 'removereels'
+            keyAlias 'removereels'
+            keyPassword 'removereels'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.shared
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
