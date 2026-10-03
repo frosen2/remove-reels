@@ -1,7 +1,8 @@
 # Remove Reels
 
 An Android app that hides the **Reels tab** in Instagram while it's turned on.
-Reels that people send you in DMs still open normally.
+Reels that people send you in DMs still open, but you can't swipe from them into
+an endless stream of more reels.
 
 ## How it works
 
@@ -13,6 +14,8 @@ The app runs as an Android *Accessibility service*. While blocking is on:
   sends you straight back to Home.
 - When you open a reel from a DM, Instagram shows it in a separate viewer without
   selecting the Reels tab, so that still works.
+- If you swipe up from that reel to the next one, it snaps you back to the reel you
+  opened (or closes the viewer and returns you to the chat).
 
 Turn blocking off (in the app or with the Quick Settings tile) and Instagram goes
 back to normal right away. The app has no internet permission and never reads or
@@ -23,6 +26,9 @@ stores your messages.
 1. On your phone, open this repo's **Releases** page (the newest one is at
    `https://github.com/frosen2/remove-reels/releases/latest`) and download
    `RemoveReels.apk`.
+   Chrome may hold the file back with a "File might be harmful" message. Tap
+   **Download anyway**. If you can't find the file afterwards, open Chrome →
+   **⋮ → Downloads** and tap it there.
 2. Open the downloaded file. If Android asks, allow your browser or Files app to
    *install unknown apps*, then tap **Install**.
    If Play Protect warns about an unrecognized app, tap **More details → Install anyway**.

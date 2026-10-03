@@ -23,7 +23,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Hides Instagram's Reels tab while it's on. Reels people send you still open."
+            android:text="While it's on: Instagram's Reels tab is hidden, and reels people send you still open but you can't swipe on to more."
             android:textColor="@color/text_dim"
             android:textSize="15sp" />
 

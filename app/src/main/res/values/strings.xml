@@ -3,5 +3,5 @@
     <string name="app_name">Remove Reels</string>
     <string name="service_label">Remove Reels</string>
     <string name="tile_label">Block Reels</string>
-    <string name="service_description">Hides the Reels tab in Instagram while blocking is turned on. Reels people send you in DMs still open. It only looks at Instagram\'s screen layout and never reads or sends your messages anywhere.</string>
+    <string name="service_description">Hides the Reels tab in Instagram while blocking is turned on. Reels people send you in DMs still open, but you can't swipe on to more reels from them. It only looks at Instagram\'s screen layout and never reads or sends your messages anywhere.</string>
 </resources>

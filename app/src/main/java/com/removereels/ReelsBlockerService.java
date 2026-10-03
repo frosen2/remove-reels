@@ -29,7 +29,10 @@ import java.util.List;
  *     between tabs), we immediately switch back to the Home tab.
  *
  * Reels opened from DMs, the feed or links open in Instagram's reel viewer
- * without selecting the Reels tab, so they are left alone.
+ * without selecting the Reels tab, so they still play. But that viewer lets you
+ * swipe on to an endless stream of other reels, so:
+ *  3. If you swipe away from the reel you opened, we snap back to it (or close
+ *     the viewer if snapping back isn't possible).
  */
 public class ReelsBlockerService extends AccessibilityService
         implements SharedPreferences.OnSharedPreferenceChangeListener {
@@ -37,11 +40,17 @@ public class ReelsBlockerService extends AccessibilityService
     private static final String INSTAGRAM = "com.instagram.android";
     private static final String ID_REELS_TAB = INSTAGRAM + ":id/clips_tab";
     private static final String ID_HOME_TAB = INSTAGRAM + ":id/feed_tab";
+    /** The full-screen vertical pager Instagram uses to show reels outside the Reels tab. */
+    private static final String ID_REEL_VIEWER = INSTAGRAM + ":id/clips_viewer_view_pager";
+    private static final String REEL_VIEWER_ID_PART = "clips_viewer";
 
     /** Small delay to batch the flood of "content changed" events into one scan. */
     private static final long SCAN_DELAY_MS = 40;
     private static final long KICK_COOLDOWN_MS = 800;
     private static final long TOAST_COOLDOWN_MS = 5000;
+    /** Scrolls right after the viewer opens are Instagram positioning it, not the user. */
+    private static final long VIEWER_SETTLE_MS = 1200;
+    private static final long SNAP_BACK_COOLDOWN_MS = 500;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable scanRunnable = this::scan;
@@ -53,6 +62,12 @@ public class ReelsBlockerService extends AccessibilityService
     private boolean scanPending;
     private long lastKickAt;
     private long lastToastAt;
+
+    private boolean viewerOpen;
+    private long viewerOpenedAt;
+    /** Position of the reel that was opened, or -1 if Instagram doesn't report positions. */
+    private int viewerStartIndex = -1;
+    private long lastSnapBackAt;
 
     @Override
     protected void onServiceConnected() {
@@ -69,7 +84,11 @@ public class ReelsBlockerService extends AccessibilityService
         }
         int type = event.getEventType();
         CharSequence pkg = event.getPackageName();
-        if (INSTAGRAM.contentEquals(pkg == null ? "" : pkg)
+        boolean fromInstagram = INSTAGRAM.contentEquals(pkg == null ? "" : pkg);
+        if (fromInstagram && type == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            onInstagramScrolled(event);
+        }
+        if (fromInstagram
                 || type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                 || type == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
             // Instagram changed, or some other window came/went (which may mean
@@ -95,9 +114,12 @@ public class ReelsBlockerService extends AccessibilityService
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null || root.getPackageName() == null
                 || !INSTAGRAM.contentEquals(root.getPackageName())) {
+            viewerOpen = false;
             hideCover();
             return;
         }
+
+        updateViewerState(root);
 
         AccessibilityNodeInfo reelsTab = findReelsTab(root);
         if (reelsTab == null) {
@@ -145,6 +167,68 @@ public class ReelsBlockerService extends AccessibilityService
         return null;
     }
 
+    private void updateViewerState(AccessibilityNodeInfo root) {
+        boolean open = false;
+        for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByViewId(ID_REEL_VIEWER)) {
+            if (node.isVisibleToUser()) {
+                open = true;
+                break;
+            }
+        }
+        if (open && !viewerOpen) startViewerSession();
+        viewerOpen = open;
+    }
+
+    private void startViewerSession() {
+        viewerOpen = true;
+        viewerOpenedAt = SystemClock.uptimeMillis();
+        viewerStartIndex = -1;
+    }
+
+    /** Keeps you on the one reel you opened instead of swiping into an endless feed. */
+    private void onInstagramScrolled(AccessibilityEvent event) {
+        AccessibilityNodeInfo pager = event.getSource();
+        if (pager == null) return;
+        String id = pager.getViewIdResourceName();
+        if (id == null || !id.contains(REEL_VIEWER_ID_PART)) return;
+
+        if (!viewerOpen) startViewerSession();
+        long now = SystemClock.uptimeMillis();
+        int index = event.getFromIndex();
+
+        if (now - viewerOpenedAt < VIEWER_SETTLE_MS) {
+            if (index >= 0) viewerStartIndex = index;
+            return;
+        }
+        if (index >= 0 && viewerStartIndex < 0) {
+            // Never saw where it started; a reel you open is the first one in the viewer.
+            viewerStartIndex = 0;
+        }
+        if (index >= 0 && index == viewerStartIndex) return; // Still on (or back on) your reel.
+        if (now - lastSnapBackAt < SNAP_BACK_COOLDOWN_MS) return;
+        lastSnapBackAt = now;
+
+        boolean snapped = false;
+        if (index > viewerStartIndex) {
+            snapped = pager.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+        } else if (index >= 0) {
+            snapped = pager.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+        }
+        if (!snapped) {
+            // Can't scroll back to it, so close the viewer (back to the chat).
+            performGlobalAction(GLOBAL_ACTION_BACK);
+        }
+        showBlockedToast("Only the reel you opened");
+    }
+
+    private void showBlockedToast(String message) {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastToastAt > TOAST_COOLDOWN_MS) {
+            lastToastAt = now;
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void leaveReelsTab(AccessibilityNodeInfo root) {
         long now = SystemClock.uptimeMillis();
         if (now - lastKickAt < KICK_COOLDOWN_MS) return;
@@ -161,10 +245,7 @@ public class ReelsBlockerService extends AccessibilityService
             performGlobalAction(GLOBAL_ACTION_BACK);
         }
 
-        if (now - lastToastAt > TOAST_COOLDOWN_MS) {
-            lastToastAt = now;
-            Toast.makeText(this, "Reels are blocked", Toast.LENGTH_SHORT).show();
-        }
+        showBlockedToast("Reels are blocked");
     }
 
     private int backgroundColor() {
